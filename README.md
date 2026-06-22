@@ -22,6 +22,8 @@ matching, spell-checking, or ranking.
 val levenshtein : string * string -> int        (* insert / delete / substitute *)
 val damerau     : string * string -> int        (* + adjacent transposition *)
 val ratio       : string * string -> real        (* similarity in [0.0, 1.0] *)
+val jaro        : string * string -> real        (* Jaro similarity *)
+val jaroWinkler : string * string -> real        (* + common-prefix boost *)
 val rank        : {query : string, candidates : string list}
                     -> (string * real) list       (* best-first, stable ties *)
 
@@ -57,6 +59,20 @@ val code = Fuzzy.soundex "Ashcraft"                (* => "A261" *)
 `ratio (a, b) = 1 - levenshtein (a, b) / max (|a|, |b|)`, with two empty
 strings scoring `1.0`. `rank` sorts by descending `ratio` and breaks ties by
 the candidates' input order (a stable sort), so its output is deterministic.
+
+### Jaro and Jaro-Winkler
+
+`jaro` is the Jaro similarity in `[0.0, 1.0]`, counting matching characters
+within a sliding window of `floor(max(|a|,|b|)/2) - 1` and their
+half-transpositions. `jaroWinkler` boosts that score by a common prefix of up
+to four characters with scaling factor `p = 0.1`, so strings that agree at the
+start rank higher:
+
+```sml
+val j  = Fuzzy.jaro ("MARTHA", "MARHTA")          (* => ~0.944 *)
+val jw = Fuzzy.jaroWinkler ("MARTHA", "MARHTA")   (* => ~0.961 *)
+val _  = Fuzzy.jaroWinkler ("DWAYNE", "DUANE")    (* => ~0.840 *)
+```
 
 ## Installation
 
@@ -96,7 +112,7 @@ lib/github.com/sjqtentacles/sml-fuzzy/
   fuzzy.mlb        public basis
 test/
   harness.sml  shared assertion harness
-  test.sml     TDD suite (34 checks)
+  test.sml     TDD suite (45 checks)
   entry.sml / main.sml
 examples/demo.sml  dependency-free fuzzy finder
 tools/polybuild    Poly/ML build wrapper
@@ -104,8 +120,9 @@ tools/polybuild    Poly/ML build wrapper
 
 ## Tests
 
-34 deterministic checks covering Levenshtein and Damerau (optimal string
-alignment) distances, the similarity ratio, stable best-first ranking, BK-tree
+45 deterministic checks covering Levenshtein and Damerau (optimal string
+alignment) distances, the similarity ratio, Jaro / Jaro-Winkler similarity
+against canonical published vectors, stable best-first ranking, BK-tree
 retrieval within an edit-distance bound, and the standard Soundex vectors
 (`Robert`/`Rupert` -> `R163`, `Rubin` -> `R150`, `Ashcraft` -> `A261`,
 `Tymczak` -> `T522`, `Honeyman` -> `H555`).

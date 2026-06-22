@@ -44,6 +44,35 @@ struct
                  (let val r = Fuzzy.ratio ("flaw", "lawn")
                   in r >= 0.0 andalso r <= 1.0 end)
 
+      val () = section "Jaro / Jaro-Winkler (canonical vectors, eps 1e-3)"
+      val eps = 1.0E~3
+      fun nearReal name (expected, actual) =
+        check name (Real.abs (expected - actual) < eps)
+      val () = nearReal "jaro MARTHA/MARHTA ~ 0.944"
+                 (0.944, Fuzzy.jaro ("MARTHA", "MARHTA"))
+      val () = nearReal "jaroWinkler MARTHA/MARHTA ~ 0.961"
+                 (0.961, Fuzzy.jaroWinkler ("MARTHA", "MARHTA"))
+      val () = nearReal "jaro DWAYNE/DUANE ~ 0.822"
+                 (0.822, Fuzzy.jaro ("DWAYNE", "DUANE"))
+      val () = nearReal "jaroWinkler DWAYNE/DUANE ~ 0.840"
+                 (0.840, Fuzzy.jaroWinkler ("DWAYNE", "DUANE"))
+      val () = nearReal "jaro DIXON/DICKSONX ~ 0.767"
+                 (0.767, Fuzzy.jaro ("DIXON", "DICKSONX"))
+      val () = nearReal "jaroWinkler DIXON/DICKSONX ~ 0.813"
+                 (0.813, Fuzzy.jaroWinkler ("DIXON", "DICKSONX"))
+      val () = nearReal "jaroWinkler identical is 1.0"
+                 (1.0, Fuzzy.jaroWinkler ("hello", "hello"))
+      val () = nearReal "jaroWinkler against empty is 0.0"
+                 (0.0, Fuzzy.jaroWinkler ("hello", ""))
+      val () = nearReal "jaro both empty is 1.0"
+                 (1.0, Fuzzy.jaro ("", ""))
+      val () = check "jaro in [0,1] for DWAYNE/DUANE"
+                 (let val r = Fuzzy.jaro ("DWAYNE", "DUANE")
+                  in r >= 0.0 andalso r <= 1.0 end)
+      val () = check "jaroWinkler >= jaro (prefix boost)"
+                 (Fuzzy.jaroWinkler ("MARTHA", "MARHTA")
+                  >= Fuzzy.jaro ("MARTHA", "MARHTA"))
+
       val () = section "Rank"
       val ranked = Fuzzy.rank
                      { query = "kitten"

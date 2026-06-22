@@ -21,6 +21,15 @@ sig
      1 - levenshtein(a, b) / max(|a|, |b|); two empty strings score 1.0. *)
   val ratio : string * string -> real
 
+  (* Jaro similarity in [0.0, 1.0]. Counts matching characters within a
+     sliding window of floor(max(|a|,|b|)/2) - 1 and half-transpositions;
+     two empty strings score 1.0, an empty against a non-empty scores 0.0. *)
+  val jaro : string * string -> real
+
+  (* Jaro-Winkler similarity in [0.0, 1.0]: the Jaro score boosted by a
+     common prefix of up to four characters with scaling factor p = 0.1. *)
+  val jaroWinkler : string * string -> real
+
   (* Rank candidates against a query by descending similarity ratio. The
      result is sorted best-first; ties keep the candidates' input order. *)
   val rank : {query : string, candidates : string list} -> (string * real) list

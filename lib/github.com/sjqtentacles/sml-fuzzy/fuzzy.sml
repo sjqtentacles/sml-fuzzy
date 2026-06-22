@@ -72,6 +72,95 @@ struct
       else 1.0 - Real.fromInt (levenshtein (a, b)) / Real.fromInt maxLen
     end
 
+  (* Jaro similarity. Characters of [a] and [b] match if they are equal and
+     positioned within [matchWindow] of each other; [t] is the number of
+     transpositions (matched characters that occur out of order), counted in
+     halves. The formula is (m/|a| + m/|b| + (m-t)/m) / 3. *)
+  fun jaro (a, b) =
+    let
+      val va = Vector.fromList (String.explode a)
+      val vb = Vector.fromList (String.explode b)
+      val la = Vector.length va
+      val lb = Vector.length vb
+    in
+      if la = 0 andalso lb = 0 then 1.0
+      else if la = 0 orelse lb = 0 then 0.0
+      else
+        let
+          (* Window is at least 0; standard definition uses max/2 - 1. *)
+          val matchWindow = Int.max (Int.max (la, lb) div 2 - 1, 0)
+          val aMatched = Array.array (la, false)
+          val bMatched = Array.array (lb, false)
+          (* First pass: greedily mark matched characters in [b] for each
+             character of [a], scanning [b] left to right within the window. *)
+          fun markMatches i =
+            if i >= la then ()
+            else
+              let
+                val lo = Int.max (0, i - matchWindow)
+                val hi = Int.min (i + matchWindow + 1, lb)
+                fun scan j =
+                  if j >= hi then ()
+                  else if not (Array.sub (bMatched, j))
+                          andalso Vector.sub (va, i) = Vector.sub (vb, j)
+                  then (Array.update (aMatched, i, true);
+                        Array.update (bMatched, j, true))
+                  else scan (j + 1)
+              in
+                scan lo; markMatches (i + 1)
+              end
+          val () = markMatches 0
+          val m = Array.foldl (fn (b, acc) => if b then acc + 1 else acc) 0 aMatched
+        in
+          if m = 0 then 0.0
+          else
+            let
+              (* Second pass: walk matched characters of [a] and [b] in order;
+                 each position where they disagree is a half-transposition. *)
+              fun collect (arr, vec) =
+                let
+                  val n = Array.length arr
+                  fun go (k, acc) =
+                    if k >= n then List.rev acc
+                    else if Array.sub (arr, k)
+                    then go (k + 1, Vector.sub (vec, k) :: acc)
+                    else go (k + 1, acc)
+                in
+                  go (0, [])
+                end
+              val matchedA = collect (aMatched, va)
+              val matchedB = collect (bMatched, vb)
+              val halfTranspositions =
+                ListPair.foldl
+                  (fn (ca, cb, acc) => if ca = cb then acc else acc + 1)
+                  0 (matchedA, matchedB)
+              val t = Real.fromInt halfTranspositions / 2.0
+              val mr = Real.fromInt m
+            in
+              (mr / Real.fromInt la
+               + mr / Real.fromInt lb
+               + (mr - t) / mr) / 3.0
+            end
+        end
+    end
+
+  (* Jaro-Winkler: boost the Jaro score by the length of the common prefix
+     (capped at 4) scaled by p = 0.1. *)
+  fun jaroWinkler (a, b) =
+    let
+      val j = jaro (a, b)
+      val maxPrefix = 4
+      fun commonPrefix (i, limit) =
+        if i >= limit then i
+        else if String.sub (a, i) = String.sub (b, i) then commonPrefix (i + 1, limit)
+        else i
+      val limit = Int.min (maxPrefix, Int.min (String.size a, String.size b))
+      val l = Real.fromInt (commonPrefix (0, limit))
+      val p = 0.1
+    in
+      j + l * p * (1.0 - j)
+    end
+
   (* Stable merge sort: equal keys retain their original relative order, which
      gives the deterministic tie-break required by [rank]. *)
   fun stableSort cmp xs =
